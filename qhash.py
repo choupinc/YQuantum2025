@@ -75,3 +75,4 @@ if __name__ == "__main__":
     result = qhash(input_bytes)
     
     print("Hash output (hex):", result.hex())
+    qc.draw("mpl")
