@@ -40,23 +40,38 @@ num_params = len(params)
 # x - 256-bit byte array
 # returns the hash value as a 256-bit byte array
 def qhash(x: bytes) -> bytes:
-    # create a dictionary mapping each parameter to its value.
+
+    nibbles = []
+    for byte in x:
+        high_nibble = byte >> 4          
+        low_nibble = byte & 0x0F            
+        nibbles.extend([high_nibble, low_nibble])
+    total_nibbles = len(nibbles)
+
+    # dictionary for mapping parameters to nibbles.
     param_values = {}
     for i in range(num_params):
-        # extract a nibble (4 bits) from the hash
-        nibble = (x[i // 2] >> (4 * (1 - (i % 2)))) & 0x0F
-        # scale it to use as a rotation angle parameter
-        value = nibble * math.pi / 8
+        nibble_a = nibbles[i % total_nibbles]
+        nibble_b = nibbles[(i + 1) % total_nibbles]
+        # XOR mixing: changes in neighboring nibbles affect each parameter.
+        mixed_nibble = nibble_a ^ nibble_b
+        # Scale the mixed value to get a rotation angle
+        value = mixed_nibble * (math.pi / 8)
         param_values[params[i]] = value
 
-    # bind the parameters to the circuit.
     bound_qc = qc.assign_parameters(param_values)
-
-    # prepare the state vector from the bound circuit
+    
     sv = Statevector.from_instruction(bound_qc)
-    # calculate the qubit expectations on the Z axis
-    exps = [sv.expectation_value(Pauli("Z"), [i]).real for i in range(NUM_QUBITS)]
-    # convert the expectations to the fixed-point values
+    
+    # Calculate the expectation values of each qubit in the Z basis.
+    exps = [
+    sv.expectation_value(Pauli("Z"), [i]).real +
+    sv.expectation_value(Pauli("X"), [i]).real +
+    sv.expectation_value(Pauli("Y"), [i]).real
+    for i in range(NUM_QUBITS)
+]
+    print("Z-basis expectation values:", exps)
+    
     fixed_exps = [toFixed(exp) for exp in exps]
 
     # pack the fixed-point results into a byte list.
@@ -70,9 +85,10 @@ def qhash(x: bytes) -> bytes:
 if __name__ == "__main__":
 
     input_bytes = bytes([0] * 32)
-    input_bytes = bytes(os.urandom(32))
+#   input_bytes = bytes(os.urandom(32))
 
     result = qhash(input_bytes)
     
     print("Hash output (hex):", result.hex())
-    qc.draw("mpl")
+
+
