@@ -1,6 +1,5 @@
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector, Pauli
-import numpy as np
 
 
 def custom_quantum_layer(qc: QuantumCircuit):
@@ -52,7 +51,7 @@ def quantum_byte_hash(byte: int) -> int:
 
 
 def full_quantum_hash(input_bytes: bytes) -> bytes:
-    """Hash 32-byte input into 32-byte output using quantum hashing logic."""
+    """Hash input bytes into output using quantum hashing logic."""
     output = bytearray()
     for b in input_bytes:
         hashed_byte = quantum_byte_hash(b)
@@ -60,18 +59,32 @@ def full_quantum_hash(input_bytes: bytes) -> bytes:
     return bytes(output)
 
 
-# 🔬 Example
 if __name__ == "__main__":
-    input_data = bytes(range(32))
+    input_data = bytes(range(256))
     output_hash = full_quantum_hash(input_data)
 
     print("Input Bytes mapped to Hashed Output:")
     seen_outputs = {}
+    log_lines = []
+
     for i, (inp, out) in enumerate(zip(input_data, output_hash)):
         if out in seen_outputs and seen_outputs[out] != inp:
-            print(
-                f"\033[91mPosition {i}: Input {inp} -> Output {out} (Duplicate Output for Input {seen_outputs[out]})\033[0m"
+            line = (
+                f"\033[91mPosition {i}: Input {inp} -> Output {out} "
+                f"(Duplicate Output for Input {seen_outputs[out]})\033[0m"
+            )
+            print(line)
+            log_lines.append(
+                f"Position {i}: Input {inp} -> Output {out} (Duplicate Output for Input {seen_outputs[out]})"
             )
         else:
-            print(f"Position {i}: Input {inp} -> Output {out}")
+            line = f"Position {i}: Input {inp} -> Output {out}"
+            print(line)
+            log_lines.append(line)
             seen_outputs[out] = inp
+
+    # Write plain log to file (no color codes)
+    with open("quantum_hash_results.txt", "w") as f:
+        f.write("Input Bytes mapped to Hashed Output:\n")
+        for line in log_lines:
+            f.write(line + "\n")
