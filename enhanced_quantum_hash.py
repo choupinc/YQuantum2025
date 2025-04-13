@@ -16,11 +16,12 @@ qc = QuantumCircuit(NUM_QUBITS)
 
 # Input encoding: parameterized RY rotation
 for i in range(NUM_QUBITS):
+    qc.h(i)  # Hadamard gate to create superposition
     qc.ry(theta[i], i)
 
 # Diffusion and entanglement layers
 for _ in range(NUM_LAYERS):
-    
+
     for i in range(NUM_QUBITS - 1):
         qc.cx(i, i + 1)
     qc.cx(NUM_QUBITS - 1, 0)  # wrap-around
@@ -32,17 +33,20 @@ for _ in range(NUM_LAYERS):
     for i in range(0, NUM_QUBITS - 2, 2):  # even-odd skip entanglement
         qc.cx(i, i + 2)
 
-    qc.h(range(NUM_QUBITS)) 
+    qc.h(range(NUM_QUBITS))
     for i in range(NUM_QUBITS - 1):
-        qc.cz(i, i + 1) 
-
+        qc.cz(i, i + 1)
+    qc.cz(NUM_QUBITS - 1, 0)  # wrap-around
+    qc.h(range(NUM_QUBITS))
 # Load simulator
 backend = Aer.get_backend("statevector_simulator")
+
 
 def quantum_hash_param(input_bytes: bytes) -> bytes:
     assert len(input_bytes) == 32
 
     # Map every 2 bytes to a rotation angle
+
     angles = []
     for i in range(NUM_QUBITS):
         byte1 = input_bytes[2 * i]
@@ -51,8 +55,9 @@ def quantum_hash_param(input_bytes: bytes) -> bytes:
         angles.append(angle)
 
     # Bind angles to parameters (safely, using assign_parameters)
-    bound_qc = qc.assign_parameters({theta[i]: angles[i] for i in range(NUM_QUBITS)}, inplace=False)
-
+    bound_qc = qc.assign_parameters(
+        {theta[i]: angles[i] for i in range(NUM_QUBITS)}, inplace=False
+    )
 
     # Transpile and run
     transpiled = transpile(bound_qc, backend)
@@ -63,10 +68,15 @@ def quantum_hash_param(input_bytes: bytes) -> bytes:
     # Get expectation values from the Z-axis
     exps = [sv.expectation_value(Pauli("Z"), [i]).real for i in range(NUM_QUBITS)]
 
-    # Map expectation values [-1,1] to bytes [0, 65535]
+    # Normalize expectation values to stabilize distribution
+    min_exp = min(exps)
+    max_exp = max(exps)
+    normalized_exps = [(val - min_exp) / (max_exp - min_exp) for val in exps]
+
+    # Map normalized values [0,1] to bytes [0, 65535]
     output_bytes = bytearray()
-    for val in exps:
-        mapped = int(((val + 1) / 2) * 65535)
+    for val in normalized_exps:
+        mapped = int(val * 65535)
         output_bytes.append((mapped >> 8) & 0xFF)
         output_bytes.append(mapped & 0xFF)
 
